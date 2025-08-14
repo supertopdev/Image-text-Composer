@@ -117,7 +117,7 @@ export default function Editor() {
     const id = generateId()
     const newLayer: TextLayer = {
       id,
-      x: canvasSize.width / 2 - 500,
+      x: canvasSize.width / 2,
       y: canvasSize.height / 2,
       rotation: 0,
       scale: 1,
@@ -272,7 +272,7 @@ export default function Editor() {
                         </select>
                       </div>
                       {/* Custom Font Upload */}
-                      <div className="row g-2">
+                      <div className="row g-2 d-none">
                         <label className="form-label m-0">Upload Font (ttf, otf, woff, woff2)</label>
                         <input
                           className="col-span-2 text-sm"
