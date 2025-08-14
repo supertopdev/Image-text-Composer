@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #__next { height: 100%; }
+
+@layer base {
+  body { @apply bg-slate-50 text-slate-800 antialiased; }
+}
+
+@layer components {
+  .card { @apply bg-white rounded-xl shadow border border-slate-200; }
+  .toolbar { @apply flex items-center gap-2; }
+  .label { @apply text-xs font-medium text-slate-600; }
+  .input { @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500; }
+  .select { @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500; }
+  .textarea { @apply w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500; }
+  .range { @apply w-full cursor-pointer; }
+
+  .btn { @apply inline-flex items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1; }
+  .btn-primary { @apply border-transparent bg-indigo-600 text-white hover:bg-indigo-500; }
+  .btn-outline { @apply border-slate-300 bg-transparent text-slate-700 hover:bg-slate-50; }
+  .btn-ghost { @apply border-transparent bg-transparent text-slate-600 hover:bg-slate-100; }
+  .btn-danger { @apply border-transparent bg-rose-600 text-white hover:bg-rose-500; }
+  .btn-sm { @apply px-2 py-1 text-xs; }
+}
+
+.checkerboard {
+  background-size: 24px 24px;
+  background-image:
+    linear-gradient(45deg, #f1f5f9 25%, transparent 25%),
+    linear-gradient(-45deg, #f1f5f9 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #f1f5f9 75%),
+    linear-gradient(-45deg, transparent 75%, #f1f5f9 75%);
+  background-position: 0 0, 0 12px, 12px -12px, -12px 0px;
+}
