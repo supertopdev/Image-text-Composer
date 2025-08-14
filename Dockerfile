@@ -21,13 +21,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # Install only production dependencies
 FROM base AS deps
-COPY package.json package-lock.json ./
+COPY package*.json ./
 RUN npm ci --omit=dev
 
 # Build with full dependencies (including dev)
 FROM base AS builder
 ENV NODE_ENV=development
-COPY package.json package-lock.json ./
+COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
