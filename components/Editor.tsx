@@ -1,8 +1,7 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react'
 import { Stage, Layer, Image as KonvaImage, Text as KonvaText, Rect, Group } from 'react-konva'
-import useImage from 'use-image'
 import Konva from 'konva'
-import axios from 'axios'
+
 
 type TextLayer = {
   id: string
@@ -18,9 +17,6 @@ type TextLayer = {
   opacity: number
   align: 'left' | 'center' | 'right'
 }
-
-const API_KEY = "AIzaSyA37MNosfvzeCIqEAiQxAUMmj6zFFaENyM";
-const FONT_API_URL = `https://www.googleapis.com/webfonts/v1/webfonts?key=${API_KEY}`;
 
 function generateId() {
   return Math.random().toString(36).slice(2, 9)
@@ -70,16 +66,15 @@ export default function Editor() {
 
   useEffect(() => {
     // const key = process.env.NEXT_PUBLIC_GOOGLE_FONTS_API_KEY;
-    // const key = "AIzaSyA37MNosfvzeCIqEAiQxAUMmj6zFFaENyM"
-    // if (!key) return; // optional
-    // fetch(FONT_API_URL)
-    //   .then((r) => r.json())
-    //   .then((json) => {
-    //     if (Array.isArray(json.items)) setGoogleFonts(json.items.map((f: any) => f.family));
-    //   })
-    //   .catch(() => {});
-    const fonts = ['Arial', 'Roboto', 'Lato', 'Open Sans', 'Montserrat', 'Poppins', 'Oswald']
-    setGoogleFonts(fonts);
+    const key = "AIzaSyA37MNosfvzeCIqEAiQxAUMmj6zFFaENyM"
+    const FONT_API_URL = `https://www.googleapis.com/webfonts/v1/webfonts?key=${key}`;
+    if (!key) return; // optional
+    fetch(FONT_API_URL)
+      .then((r) => r.json())
+      .then((json) => {
+        if (Array.isArray(json.items)) setGoogleFonts(json.items.map((f: any) => f.family));
+      })
+      .catch(() => {});
   }, []);
 
   // Load a Google font dynamically when selected
@@ -90,11 +85,12 @@ export default function Editor() {
     const link = document.createElement("link");
     link.id = id;
     link.rel = "stylesheet";
-    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@100..900&display=swap`;
+    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@100;300;400;700;900&display=swap`;
     document.head.appendChild(link);
     // FontFaceSet load
     try {
       await (document as any).fonts.load(`16px "${family}"`);
+      await document.fonts.ready;
     } catch {}
   }, []);
 
@@ -127,7 +123,7 @@ export default function Editor() {
       fontStyle: 'normal',
       fill: '#ffffff',
       opacity: 1,
-      align: 'center'
+      align: 'left'
     }
     setLayers(prev => [...prev, newLayer])
     setSelectedId(id)
@@ -261,6 +257,7 @@ export default function Editor() {
                             const family = e.target.value;
                             if (googleFonts.includes(family)) await ensureGoogleFontLoaded(family);
                             updateLayer(l.id, { fontFamily: family });
+                            stageRef.current?.batchDraw();
                           }}
                           className="form-select"
                         >
@@ -272,16 +269,17 @@ export default function Editor() {
                         </select>
                       </div>
                       {/* Custom Font Upload */}
-                      <div className="row g-2 d-none">
+                      <div className="row g-2">
                         <label className="form-label m-0">Upload Font (ttf, otf, woff, woff2)</label>
                         <input
                           className="col-span-2 text-sm"
                           type="file"
                           accept=".ttf,.otf,.woff,.woff2"
                           onChange={async (e) => {
-                            const f = e.currentTarget.files?.[0];
+                            const inputEl = e.currentTarget; // Save DOM element reference
+                            const f = inputEl.files?.[0];
                             if (f) await onUploadFontFile(f);
-                            e.currentTarget.value = "";
+                            inputEl.value = "";
                           }}
                         />
                       </div>
@@ -305,9 +303,9 @@ export default function Editor() {
                     </div>
 
                     <div className="row g-2">
-                      <div className="col-4 d-grid"><button onClick={() => updateLayer(l.id, { align: 'left' })} className="btn btn-sm btn-outline-secondary w-100">Left</button></div>
-                      <div className="col-4 d-grid"><button onClick={() => updateLayer(l.id, { align: 'center' })} className="btn btn-sm btn-outline-secondary w-100">Center</button></div>
-                      <div className="col-4 d-grid"><button onClick={() => updateLayer(l.id, { align: 'right' })} className="btn btn-sm btn-outline-secondary w-100">Right</button></div>
+                      <div className="col-4 d-grid"><button onClick={() => updateLayer(l.id, { x: 0, align: 'left' })} className="btn btn-sm btn-outline-secondary w-100">Left</button></div>
+                      <div className="col-4 d-grid"><button onClick={() => updateLayer(l.id, { x: 0, align: 'center' })} className="btn btn-sm btn-outline-secondary w-100">Center</button></div>
+                      <div className="col-4 d-grid"><button onClick={() => updateLayer(l.id, { x: 0, align: 'right' })} className="btn btn-sm btn-outline-secondary w-100">Right</button></div>
                     </div>
 
                     <div className="row g-2">
