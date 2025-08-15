@@ -26,7 +26,7 @@ RUN npm ci --omit=dev
 
 # Build with full dependencies (including dev)
 FROM base AS builder
-ENV NODE_ENV=development
+ENV NODE_ENV=production
 COPY package*.json ./
 RUN npm ci
 COPY . .
@@ -42,7 +42,6 @@ COPY --from=deps /app/node_modules ./node_modules
 
 # Copy necessary artifacts from the builder
 COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
 # Include next.config.js if present
 COPY --from=builder /app/next.config.js ./next.config.js
 # Include package.json for next start
