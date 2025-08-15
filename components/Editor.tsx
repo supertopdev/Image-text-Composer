@@ -152,7 +152,7 @@ export default function Editor() {
         textNode._clearCache();
         
         // Force text measurement recalculation
-        textNode._setTextData({});
+        (textNode as any)._setTextData?.({});
         
         // Manually trigger redraw
         textNode.getLayer()?.batchDraw();
