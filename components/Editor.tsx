@@ -2,7 +2,6 @@ import React, { useCallback, useRef, useState, useEffect } from 'react'
 import { Stage, Layer, Image as KonvaImage, Text as KonvaText, Rect, Group } from 'react-konva'
 import Konva from 'konva'
 
-
 type TextLayer = {
   id: string
   x: number
@@ -42,10 +41,12 @@ export default function Editor() {
   const img = useUploadedImage(file)
   const [layers, setLayers] = useState<TextLayer[]>([])
   const stageRef = useRef<Konva.Stage | null>(null)
+  const textRefs = useRef<{ [key: string]: Konva.Text }>({})
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 })
   const [googleFonts, setGoogleFonts] = useState<string[]>([]);
   const [customFonts, setCustomFonts] = useState<string[]>([]);
+  const [loadedFonts, setLoadedFonts] = useState<Set<string>>(new Set(['Arial', 'serif', 'sans-serif']));
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -77,21 +78,89 @@ export default function Editor() {
       .catch(() => {});
   }, []);
 
-  // Load a Google font dynamically when selected
-  const ensureGoogleFontLoaded = useCallback(async (family: string) => {
-    // Use CSS @import via WebFont loader alternative: create a stylesheet link for the chosen family
+  // More robust font loading with polling
+  const ensureGoogleFontLoaded = useCallback(async (family: string): Promise<boolean> => {
+    // Skip if already loaded
+    if (loadedFonts.has(family)) return true;
+
     const id = `gfont-${family.replace(/\s+/g, "-")}`;
-    if (document.getElementById(id)) return;
-    const link = document.createElement("link");
-    link.id = id;
-    link.rel = "stylesheet";
-    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@100;300;400;700;900&display=swap`;
-    document.head.appendChild(link);
-    // FontFaceSet load
-    try {
-      await (document as any).fonts.load(`16px "${family}"`);
-      await document.fonts.ready;
-    } catch {}
+    
+    // Add font link if not already present
+    if (!document.getElementById(id)) {
+      const link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@100;300;400;700;900&display=swap`;
+      document.head.appendChild(link);
+    }
+
+    // Function to check if font is loaded
+    const isFontLoaded = () => {
+      try {
+        return document.fonts.check(`16px "${family}"`);
+      } catch {
+        return false;
+      }
+    };
+
+    // If already loaded, return immediately
+    if (isFontLoaded()) {
+      setLoadedFonts(prev => new Set([...prev, family]));
+      return true;
+    }
+
+    // Wait for font to load with polling and timeout
+    const maxWaitTime = 5000; // 5 seconds max
+    const pollInterval = 100; // Check every 100ms
+    let waitTime = 0;
+
+    return new Promise((resolve) => {
+      const pollFont = () => {
+        if (isFontLoaded()) {
+          setLoadedFonts(prev => new Set([...prev, family]));
+          resolve(true);
+          return;
+        }
+
+        waitTime += pollInterval;
+        if (waitTime >= maxWaitTime) {
+          console.warn(`Font ${family} failed to load within timeout`);
+          resolve(false);
+          return;
+        }
+
+        setTimeout(pollFont, pollInterval);
+      };
+
+      // Start polling
+      pollFont();
+    });
+  }, [loadedFonts]);
+
+  // Force redraw all text nodes
+  const forceTextRedraw = useCallback((layerId?: string) => {
+    if (!stageRef.current) return;
+
+    const textNodes = layerId 
+      ? [textRefs.current[layerId]].filter(Boolean)
+      : Object.values(textRefs.current).filter(Boolean);
+
+    textNodes.forEach((textNode) => {
+      if (textNode) {
+        // Clear all caches
+        textNode.clearCache();
+        textNode._clearCache();
+        
+        // Force text measurement recalculation
+        textNode._setTextData({});
+        
+        // Manually trigger redraw
+        textNode.getLayer()?.batchDraw();
+      }
+    });
+
+    // Also force stage redraw
+    stageRef.current.batchDraw();
   }, []);
 
   // Custom font upload via FontFace API
@@ -107,6 +176,10 @@ export default function Editor() {
     await ff.load();
     (document as any).fonts.add(ff);
     setCustomFonts((f) => Array.from(new Set([family, ...f])));
+    setLoadedFonts(prev => new Set([...prev, family]));
+    
+    // Force redraw after custom font is loaded
+    setTimeout(() => forceTextRedraw(), 100);
   };
 
   function addText() {
@@ -131,11 +204,17 @@ export default function Editor() {
 
   function updateLayer(id: string, patch: Partial<TextLayer>) {
     setLayers(prev => prev.map(l => l.id === id ? { ...l, ...patch } : l))
+    
+    // If font family is being updated, force redraw after state update
+    if (patch.fontFamily) {
+      setTimeout(() => forceTextRedraw(id), 50);
+    }
   }
 
   function removeLayer(id: string) {
     setLayers(prev => prev.filter(l => l.id !== id))
     if (selectedId === id) setSelectedId(null)
+    delete textRefs.current[id]
   }
 
   function moveLayerForward(id: string) {
@@ -171,6 +250,27 @@ export default function Editor() {
     a.remove()
   }
 
+  // Handle font family change with proper loading
+  const handleFontFamilyChange = useCallback(async (layerId: string, family: string) => {
+    // Update layer immediately
+    updateLayer(layerId, { fontFamily: family });
+
+    // If it's a Google Font, ensure it's loaded
+    if (googleFonts.includes(family) && !loadedFonts.has(family)) {
+      const loaded = await ensureGoogleFontLoaded(family);
+      if (loaded) {
+        // Force multiple redraws to ensure font takes effect
+        setTimeout(() => forceTextRedraw(layerId), 100);
+        setTimeout(() => forceTextRedraw(layerId), 300);
+        setTimeout(() => forceTextRedraw(layerId), 500);
+      }
+    } else {
+      // For already loaded fonts or system fonts, just force redraw
+      setTimeout(() => forceTextRedraw(layerId), 50);
+      setTimeout(() => forceTextRedraw(layerId), 150);
+    }
+  }, [googleFonts, loadedFonts, ensureGoogleFontLoaded, forceTextRedraw]);
+
   return (
     <div className="container-fluid">
       <div className="row">
@@ -180,31 +280,47 @@ export default function Editor() {
               <input className="form-control" type="file" accept="image/png" onChange={e => setFile(e.target.files?.[0] ?? null)} />
               <button onClick={addText} className="btn btn-primary">Add text</button>
               <button onClick={exportClientPNG} className="btn btn-outline-secondary">Export PNG (client)</button>
+              <button onClick={() => forceTextRedraw()} className="btn btn-outline-info">Change Font</button>
             </div>
 
             <div ref={containerRef} className="rounded-3 border bg-light overflow-hidden" style={{ width: '100%', height: canvasSize.height }}>
-              <Stage width={canvasSize.width} height={canvasSize.height} ref={stageRef} onMouseDown={e => {
-                // click on empty area -> deselect
-                const clickedOnEmpty = e.target === e.target.getStage()
-                if (clickedOnEmpty) setSelectedId(null)
-              }}>
+              <Stage 
+                width={canvasSize.width} 
+                height={canvasSize.height} 
+                ref={stageRef} 
+                onMouseDown={e => {
+                  const clickedOnEmpty = e.target === e.target.getStage()
+                  if (clickedOnEmpty) setSelectedId(null)
+                }}
+              >
                 <Layer>
-                  {/* background rect to show boundaries */}
                   <Rect x={0} y={0} width={canvasSize.width} height={canvasSize.height} fill="#f7f7f7" />
                 </Layer>
 
                 <Layer>
-                  {/* image */}
                   {img && (
                     <KonvaImage image={img} x={0} y={0} width={canvasSize.width} height={canvasSize.height} />
                   )}
                 </Layer>
 
                 <Layer>
-                  {/* text layers */}
                   {layers.map((l) => (
-                    <Group key={l.id} x={l.x} y={l.y} rotation={l.rotation} draggable onDragEnd={e => updateLayer(l.id, { x: e.target.x(), y: e.target.y() })} onClick={() => setSelectedId(l.id)} onTap={() => setSelectedId(l.id)}>
+                    <Group 
+                      key={l.id}
+                      x={l.x} 
+                      y={l.y} 
+                      rotation={l.rotation} 
+                      draggable 
+                      onDragEnd={e => updateLayer(l.id, { x: e.target.x(), y: e.target.y() })} 
+                      onClick={() => setSelectedId(l.id)} 
+                      onTap={() => setSelectedId(l.id)}
+                    >
                       <KonvaText
+                        ref={(node) => {
+                          if (node) {
+                            textRefs.current[l.id] = node;
+                          }
+                        }}
                         text={l.text}
                         fontSize={l.fontSize}
                         fontFamily={l.fontFamily}
@@ -216,6 +332,8 @@ export default function Editor() {
                         scaleX={l.scale}
                         scaleY={l.scale}
                         listening
+                        perfectDrawEnabled={false}
+                        transformsEnabled="all"
                       />
                     </Group>
                   ))}
@@ -253,22 +371,18 @@ export default function Editor() {
                         <label className="form-label m-0">Font family</label>
                         <select
                           value={l.fontFamily}
-                          onChange={async (e) => {
-                            const family = e.target.value;
-                            if (googleFonts.includes(family)) await ensureGoogleFontLoaded(family);
-                            updateLayer(l.id, { fontFamily: family });
-                            stageRef.current?.batchDraw();
-                          }}
+                          onChange={(e) => handleFontFamilyChange(l.id, e.target.value)}
                           className="form-select"
                         >
                           {[l.fontFamily, ...customFonts, ...googleFonts]
                           .filter((v, i, a) => a.indexOf(v) === i)
                           .map((f) => (
-                            <option key={f} value={f}>{f}</option>
+                            <option key={f} value={f}>
+                              {f} {loadedFonts.has(f) ? '✓' : '⏳'}
+                            </option>
                           ))}
                         </select>
                       </div>
-                      {/* Custom Font Upload */}
                       <div className="row g-2">
                         <label className="form-label m-0">Upload Font (ttf, otf, woff, woff2)</label>
                         <input
@@ -276,7 +390,7 @@ export default function Editor() {
                           type="file"
                           accept=".ttf,.otf,.woff,.woff2"
                           onChange={async (e) => {
-                            const inputEl = e.currentTarget; // Save DOM element reference
+                            const inputEl = e.currentTarget;
                             const f = inputEl.files?.[0];
                             if (f) await onUploadFontFile(f);
                             inputEl.value = "";
